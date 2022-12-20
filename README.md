@@ -11,4 +11,4 @@ uvicorn satellite_data_service.main:app --port 8001 --reload
 
 ## Notes
 Currently, the grid is not automatically downloaded, if missing.
-Therefore the data needs to be manually downloaded from the official [ESA website](https://sentinel.esa.int/documents/247904/1955685/S2A_OPER_GIP_TILPAR_MPC__20151209T095117_V20150622T000000_21000101T000000_B00.kml/ec05e22c-a2bc-4a13-9e84-02d5257b09a8) once and then placed into a `data/` folder under this modules' root directory.
+Therefore the data needs to be downloaded by running the `download_grid.sh` file.
