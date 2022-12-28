@@ -1,13 +1,16 @@
-import geopandas as gpd
-import logging
 import datetime
 import json
-from fastapi import FastAPI, APIRouter, Request
-from fastapi.responses import JSONResponse
-from aimlsse_api.satellite_data_access import SatelliteDataAccess
-from satellite_data_service.location_to_grid_cells_mapper import LocationToGridCellsMapper
+import logging
 
-class SatelliteDataAccessor(SatelliteDataAccess):
+import geopandas as gpd
+from aimlsse_api.interface import SatelliteDataAccess
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
+from satellite_data_service.location_to_grid_cells_mapper import \
+    LocationToGridCellsMapper
+
+
+class SatelliteDataService(SatelliteDataAccess):
     def __init__(self) -> None:
         super().__init__()
         # Setup a router for FastAPI
@@ -37,5 +40,5 @@ class SatelliteDataAccessor(SatelliteDataAccess):
 
 logging.basicConfig(level=logging.DEBUG)
 app = FastAPI()
-satelliteDataAccessor = SatelliteDataAccessor()
-app.include_router(satelliteDataAccessor.router)
+satelliteDataService = SatelliteDataService()
+app.include_router(satelliteDataService.router)
