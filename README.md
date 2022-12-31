@@ -2,13 +2,14 @@
 This service provides access to measurement-data of the [Sentinel-1](https://sentinel.esa.int/web/sentinel/missions/sentinel-1) and [Sentinel-2](https://sentinel.esa.int/web/sentinel/missions/sentinel-2) satellites.
 Additionally, operations on the surface-subdividing geometry "grid" are provided.
 
-## How to run
-For now, this remains a manual task.
-To start the service navigate into the root directory of this repository and enter the following command into a terminal
+## Setup
+When not running this service via docker compose like in [AIMLESS](https://git.scc.kit.edu/master-thesis-ai-ml-based-support-for-satellite-exploration/aimlsse), first create a volume:
 ```
-uvicorn satellite_data_service.main:app --port 8001 --reload
+docker volume create --name satellite-data-storage
 ```
-
-## Notes
-Currently, the grid is not automatically downloaded, if missing.
-Therefore the data needs to be downloaded by running the `download_grid.sh` file.
+Then run the container and use the volume:
+```
+docker run -d -p 8000:8000 -v satellite-data-storage:/aimlsse/app/grid satellite-data-service
+```
+Here `/aimlsse/app/` is the working directory of the service, while `grid` is the subdirectory for the data that is specified in the `config.yml` file.
+If the path in the config is changed, update the container-side binding of the volume in the command above as well.
