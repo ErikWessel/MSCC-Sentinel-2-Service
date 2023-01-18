@@ -28,14 +28,16 @@ class LocationToGridCellsMapper ():
         """Provides a way to initialize and reload the grid"""
         logging.info('Loading Sentinel-Grid..')
         if not os.path.exists(self.grid_filepath):
+            os.makedirs(os.path.dirname(self.grid_filepath))
             logging.info('Sentinel-Grid is not avaiable, downloading..')
             response = requests.get(self.grid_download_url)
             response.raise_for_status()
             with open(self.grid_filepath, 'wb') as file:
                 file.write(response.content)
             logging.info('Sentinel-Grid download complete!')
+
         fiona.supported_drivers['KML'] = 'rw' # enable KML support
-        LocationToGridCellsMapper.__grid = gpd.read_file(self.grid_filepath, driver='KML')
+        LocationToGridCellsMapper.__grid = gpd.read_file(self.grid_filepath)
         logging.info('Sentinel-Grid loaded!')
 
     def get_grid(self) -> gpd.GeoDataFrame:
