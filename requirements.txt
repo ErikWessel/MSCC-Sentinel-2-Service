@@ -5,3 +5,5 @@ geopandas>=0.12.2
 PyYAML>=6.0
 requests>=2.28.1
 uvicorn>=0.20.0
+schedule>=1.1.0
+sentinelsat>=1.1.1
