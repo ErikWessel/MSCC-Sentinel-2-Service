@@ -1,19 +1,16 @@
 import logging
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import fiona
 import geopandas as gpd
 import requests
 import yaml
 
-MappingType = Dict[Tuple[float, float], List[str]]
-"""This type denotes a dict of (longitude, latitude) tuples for keys with a list of grid-cell-names"""
-
 class LocationToGridCellsMapper ():
     """Provides mappings from location-points to the grid-cells in which they are located"""
 
-    __grid = None
+    __grid: Optional[gpd.GeoDataFrame] = None
     """
     The grid that is composed of polygons, which in turn cover a certain area of the planet.
     Instead of using this variable directly, use the `get_grid()` method to make sure it is properly initialized.
@@ -37,7 +34,9 @@ class LocationToGridCellsMapper ():
             logging.info('Sentinel-Grid download complete!')
 
         fiona.supported_drivers['KML'] = 'rw' # enable KML support
-        LocationToGridCellsMapper.__grid = gpd.read_file(self.grid_filepath)
+        data: gpd.GeoDataFrame = gpd.read_file(self.grid_filepath)
+        data.rename(columns={'Name': 'cell_name'}, inplace=True)
+        LocationToGridCellsMapper.__grid = data
         logging.info('Sentinel-Grid loaded!')
 
     def get_grid(self) -> gpd.GeoDataFrame:
@@ -80,7 +79,7 @@ class LocationToGridCellsMapper ():
         logging.debug(f'Result of selection: {result}')
         return result
 
-    def mapLocationsToContainingGridCellLabels(self, locations:gpd.GeoDataFrame) -> MappingType:
+    def mapLocationsToContainingGridCellLabels(self, locations:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
         Maps location-points in the form of (longitude, latitude) `geopandas.geometry.Point`s to the grid-cells
         in which they are located.
@@ -105,9 +104,7 @@ class LocationToGridCellsMapper ():
         logging.debug(grid)
         logging.info('Starting mapping of locations to grid-cells..')
         # TODO - Find more efficient way of mapping
-        result = {}
-        for point in locations.geometry:
-            result[(point.x, point.y)] = [ tile['Name'] for index, tile in grid.iterrows() if tile.geometry.contains(point) ]
+        result = grid.sjoin(locations)
         logging.info('Mapping of locations to grid-cells complete!')
         logging.debug(f'Result of mapping: {result}')
         return result
