@@ -18,22 +18,7 @@ from shapely import Point, Polygon
 
 from . import SentinelImageProcessor
 
-
-class QueryStates(str, Enum):
-    PROCESSED   = 'processed'
-    '''Data has been processed and can be removed from storage, if necessary'''
-    AVAILABLE   = 'available'
-    '''Data is available in storage'''
-    INCOMPLETE  = 'incomplete'
-    '''Data is not yet available in storage, but the download is partially complete'''
-    PENDING     = 'pending'
-    '''Data is not here but on the copernicus-hub - a request has already been made'''
-    NEW         = 'new'
-    '''Data is not here and it is unclear, if it is on the copernicus-hub - no request has been made'''
-    UNAVAILABLE = 'unavailable'
-    '''Data is not here and not on the copernicus-hub'''
-    INVALID     = 'invalid'
-    '''Identifier does not relate to any data'''
+from aimlsse_api.data import QueryStates
 
 class RequestScheduler(object):
     def __new__(cls):

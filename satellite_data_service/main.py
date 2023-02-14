@@ -25,9 +25,9 @@ class SatelliteDataService(SatelliteDataAccess):
         # Setup a router for FastAPI
         self.router = APIRouter()
         self.router.add_api_route('/queryContainingGeometry', self.queryContainingGeometry, methods=['POST'])
-        self.router.add_api_route('/queryMeasurements', self.queryMeasurements, methods=['POST'])
-        self.router.add_api_route('/request', self.request, methods=['GET'])
-        self.router.add_api_route('/process_data_for_request', self.process_data_for_request, methods=['POST'])
+        self.router.add_api_route('/queryProductsMetadata', self.queryProductsMetadata, methods=['POST'])
+        self.router.add_api_route('/requestProduct', self.requestProduct, methods=['GET'])
+        self.router.add_api_route('/extractFeatures', self.extractFeatures, methods=['POST'])
         
         self.locationToGridCellsMapper = LocationToGridCellsMapper()
 
@@ -43,26 +43,30 @@ class SatelliteDataService(SatelliteDataAccess):
         logging.info('Query for geometry complete!')
         return JSONResponse(json.loads(grid_cells.to_json(drop_id=True)))
 
-    async def queryMeasurements(self, footprint:str, datetime_from:datetime, datetime_to:datetime,
-    credentials: HTTPBasicCredentials = Depends(security)) -> JSONResponse:
+    async def queryProductsMetadata(self, footprint:str, datetime_from:datetime, datetime_to:datetime,
+        credentials:HTTPBasicCredentials = Depends(security)):
+        # Convert footprint to shape and assert type
         footprint_geometry = shapely.from_wkt(footprint)
         assert isinstance(footprint_geometry, (Point, Polygon))
-
+        # Query products
         ca = CopernicusAccess(credentials.username, credentials.password)
-        logging.info('Querying for measurements..')
+        logging.info(f'Querying products from {datetime_from} to {datetime_to} in footprint {footprint_geometry}..')
         data = ca.search(footprint_geometry, datetime_from, datetime_to)
-        logging.info('Query for measurements complete!')
+        logging.info('Query for products complete!')
         return JSONResponse(json.loads(data.to_json()))
     
-    async def request(self, id:str, credentials: HTTPBasicCredentials = Depends(security)):
-        ca = CopernicusAccess(credentials.username, credentials.password)
+    async def requestProduct(self, id:str, credentials:HTTPBasicCredentials = Depends(security)):
         scheduler = RequestScheduler()
         state = scheduler.request(id, credentials.username, credentials.password)
         scheduler.store_schedule()
-        return PlainTextResponse(state.value)
+        return JSONResponse({
+            'id': id,
+            'state': state.value
+        })
     
-    async def process_data_for_request(self, id:str, radius:float, data:dict):
+    async def extractFeatures(self, id:str, radius:float, data:dict):
         self.validate_json_parameters(data, [['bands'], ['locations'], ['crs']])
+        self.logger.debug(f'Starting feature-extraction for id {id} with radius {radius} m and data:\n{data}')
         bands: List[str] = data['bands']
         locations: gpd.GeoDataFrame = gpd.GeoDataFrame.from_features(data['locations'], crs=data['crs'])
         try:
