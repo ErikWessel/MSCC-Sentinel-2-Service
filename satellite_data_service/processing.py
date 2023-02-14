@@ -1,7 +1,9 @@
 import logging
 import os
 import pathlib
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Tuple
 from zipfile import ZipFile
 
@@ -13,8 +15,7 @@ import rasterio.warp
 import yaml
 from bs4 import BeautifulSoup
 from shapely import Point, Polygon, box
-from pathlib import Path
-import shutil
+
 
 @dataclass
 class SentinelData:
@@ -84,7 +85,7 @@ class SentinelImageProcessor:
         self.logger.debug(f'The bounding boxes of the following locations are outside the data bounds: {outside_locations.name}')
         locations = locations[locations['contained']]
         # Extract data in bounding boxes from whole data and write to files
-        out_dir = os.path.join(self.data_dir, id)
+        out_dir = os.path.join(self.data_dir, f'{id}_all_bands')
         os.makedirs(out_dir, exist_ok=True)
         for band_name, band in data.items():
             out_band_dir = os.path.join(out_dir, band_name)
@@ -98,8 +99,19 @@ class SentinelImageProcessor:
                     os.path.join(out_band_dir, row['name'] + '.jp2'),
                     SentinelImageProcessor.image_drivers['jp2']
                 ), axis=1)
+        # Copy only the wanted bands in a new temporary folder
+        tmp_dir = os.path.join(self.data_dir, id)
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
+        os.makedirs(tmp_dir)
+        for band_name in data.keys():
+            shutil.copytree(
+                os.path.join(out_dir, band_name),
+                os.path.join(tmp_dir, band_name),
+                copy_function=shutil.copy2
+            )
         # Finally pack all data in a zip file and return the filepath
-        return shutil.make_archive(out_dir, 'zip', root_dir=self.data_dir, base_dir=id)
+        return shutil.make_archive(tmp_dir, 'zip', root_dir=self.data_dir, base_dir=id)
     
     def get_band_name_for_files(self, name:str) -> str:
         if len(name) < 3:
