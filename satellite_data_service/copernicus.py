@@ -1,18 +1,22 @@
 import logging
 import os
-import time
 import threading
+import time
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
+from zipfile import ZipFile
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
+import schedule
 import yaml
 from sentinelsat import (InvalidKeyError, LTAError, LTATriggered, SentinelAPI,
                          ServerError)
 from shapely import Point, Polygon
-import schedule
+
+from . import SentinelImageProcessor
 
 
 class QueryStates(str, Enum):
@@ -57,9 +61,12 @@ class RequestScheduler(object):
                 self.schedule.index.name = 'id'
             self.logger.debug(self.schedule)
             self.active_requests: Dict[str, schedule.Job] = {}
-            thread = threading.Thread(target=self.run_scheduler)
-            thread.start()
+            self.run_as_thread(self.run_scheduler)
             RequestScheduler.initialized = True
+
+    def run_as_thread(self, function:Callable):
+        thread = threading.Thread(target=function)
+        thread.start()
 
     def run_scheduler(self):
         while True:
@@ -111,6 +118,24 @@ class RequestScheduler(object):
             request = self.__get_request(id)
             state = request['state']
         return QueryStates(state)
+
+    def process_data_for_request(self, id:str, bands:List[str], locations:gpd.GeoDataFrame, radius:float) -> str:
+        request = self.__get_request(id)
+        if request is None:
+            raise ValueError(f'There is no request with id {id}')
+        state = QueryStates(request['state'])
+        if state != QueryStates.AVAILABLE:
+            raise ValueError(f'Only requests of state {QueryStates.AVAILABLE.name} may be processed - actual state was {state}')
+        path_no_ext = os.path.join(self.data_dir, request['title'])
+        filename_zip = path_no_ext + '.zip'
+        dir_safe = path_no_ext + '.SAFE'
+        if not os.path.exists(dir_safe):
+            # Extract zip file like S2A_MSIL1C_20220104T103431_N0301_R108_T32UMA_20220104T123507.zip
+            # to S2A_MSIL1C_20220104T103431_N0301_R108_T32UMA_20220104T123507.SAFE/
+            with ZipFile(filename_zip) as zip_file:
+                zip_file.extractall(self.data_dir)
+        # Extract features from the sentinel data
+        return SentinelImageProcessor().process(dir_safe, id, bands, locations, radius)
 
     def __check_available(self, id:str) -> QueryStates:
         request = self.__get_request(id)
@@ -176,18 +201,6 @@ class RequestScheduler(object):
         checked_state = self.__check_available(id)
         self.logger.debug(f'Current state is {checked_state} for id {id}')
         return checked_state == QueryStates.AVAILABLE
-
-    def process_available_requests(self):
-        requests = self.__get_requests_by_state(QueryStates.AVAILABLE)
-        print(f'Processing {len(requests)} request of state {QueryStates.AVAILABLE.value}')
-        if len(requests) > 0:
-            print('Here, processing would occur. Refer to process_sentinel2.ipynb for now!')
-
-    def process_requests(self, api:SentinelAPI):
-        self.process_available_requests()
-        self.process_incomplete_requests(api)
-        self.process_pending_requests(api)
-        self.logger.debug(self.schedule)
 
 class CopernicusAccess():
     def __init__(self, username:str, password:str) -> None:

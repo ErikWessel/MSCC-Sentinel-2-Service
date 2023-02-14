@@ -5,3 +5,5 @@ copernicus:
   search-url: "https://apihub.copernicus.eu/apihub/search"
   data-dir: "data/sentinel/raw/"
   schedule-filepath: "data/sentinel/schedule.csv"
+processing:
+  data-dir: "data/sentinel/processed/"

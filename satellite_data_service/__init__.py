@@ -1,2 +1,3 @@
 from .location_to_grid_cells_mapper import LocationToGridCellsMapper
+from .processing import SentinelImageProcessor
 from .copernicus import CopernicusAccess, RequestScheduler
