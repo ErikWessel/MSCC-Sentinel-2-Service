@@ -104,13 +104,16 @@ class RequestScheduler(object):
             state = request['state']
         return QueryStates(state)
 
-    def process_data_for_request(self, id:str, bands:List[str], locations:gpd.GeoDataFrame, radius:float) -> str:
+    def __assert_request_available(self, id:str):
         request = self.__get_request(id)
         if request is None:
             raise ValueError(f'There is no request with id {id}')
         state = QueryStates(request['state'])
         if state != QueryStates.AVAILABLE:
             raise ValueError(f'Only requests of state {QueryStates.AVAILABLE.name} may be processed - actual state was {state}')
+    
+    def __unzip_product(self, id:str) -> str:
+        request = self.__get_request(id)
         path_no_ext = os.path.join(self.data_dir, request['title'])
         filename_zip = path_no_ext + '.zip'
         dir_safe = path_no_ext + '.SAFE'
@@ -119,8 +122,18 @@ class RequestScheduler(object):
             # to S2A_MSIL1C_20220104T103431_N0301_R108_T32UMA_20220104T123507.SAFE/
             with ZipFile(filename_zip) as zip_file:
                 zip_file.extractall(self.data_dir)
+        return dir_safe
+
+    def process_data_for_request(self, id:str, bands:List[str], locations:gpd.GeoDataFrame, radius:float) -> str:
+        self.__assert_request_available(id)
+        product_dir = self.__unzip_product(id)
         # Extract features from the sentinel data
-        return SentinelImageProcessor().process(dir_safe, id, bands, locations, radius)
+        return SentinelImageProcessor().process(product_dir, id, bands, locations, radius)
+    
+    def get_raw_product(self, id:str) -> str:
+        self.__assert_request_available(id)
+        request = self.__get_request(id)
+        return os.path.join(self.data_dir, request['title'] + '.zip')
 
     def __check_available(self, id:str) -> QueryStates:
         request = self.__get_request(id)

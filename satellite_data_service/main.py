@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import datetime
 from http import HTTPStatus
+from pathlib import Path
 from typing import List, Union
 
 import geopandas as gpd
@@ -28,6 +29,7 @@ class SatelliteDataService(SatelliteDataAccess):
         self.router.add_api_route('/queryProductsMetadata', self.queryProductsMetadata, methods=['POST'])
         self.router.add_api_route('/requestProduct', self.requestProduct, methods=['GET'])
         self.router.add_api_route('/extractFeatures', self.extractFeatures, methods=['POST'])
+        self.router.add_api_route('/getRawProduct', self.getRawProduct, methods=['GET'])
         
         self.locationToGridCellsMapper = LocationToGridCellsMapper()
 
@@ -76,6 +78,15 @@ class SatelliteDataService(SatelliteDataAccess):
             return PlainTextResponse(error, status_code=HTTPStatus.BAD_REQUEST)
         self.logger.debug(f'Path of zip-file: {zip_filepath}')
         return FileResponse(zip_filepath, filename=f'{id}.zip')
+
+    async def getRawProduct(self, id:str):
+        try:
+            zip_filepath = RequestScheduler().get_raw_product(id)
+        except ValueError as error:
+            self.logger.debug(error)
+            return PlainTextResponse(error, status_code=HTTPStatus.BAD_REQUEST)
+        self.logger.debug(f'Path of zip-file: {zip_filepath}')
+        return FileResponse(zip_filepath, filename=Path(zip_filepath).name)
 
     def validate_json_parameters(self, data:dict, parameters:List[List[str]]) -> List[List[str]]:
         '''
