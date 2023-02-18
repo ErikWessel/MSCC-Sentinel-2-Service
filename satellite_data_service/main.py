@@ -29,7 +29,7 @@ class SatelliteDataService(SatelliteDataAccess):
         self.router.add_api_route('/queryProductsMetadata', self.queryProductsMetadata, methods=['POST'])
         self.router.add_api_route('/requestProduct', self.requestProduct, methods=['GET'])
         self.router.add_api_route('/extractFeatures', self.extractFeatures, methods=['POST'])
-        self.router.add_api_route('/getRawProduct', self.getRawProduct, methods=['GET'])
+        self.router.add_api_route('/getProduct', self.getProduct, methods=['GET'])
         
         self.locationToGridCellsMapper = LocationToGridCellsMapper()
 
@@ -79,7 +79,7 @@ class SatelliteDataService(SatelliteDataAccess):
         self.logger.debug(f'Path of zip-file: {zip_filepath}')
         return FileResponse(zip_filepath, filename=f'{id}.zip')
 
-    async def getRawProduct(self, id:str):
+    async def getProduct(self, id:str):
         try:
             zip_filepath = RequestScheduler().get_raw_product(id)
         except ValueError as error:
