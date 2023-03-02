@@ -7,6 +7,8 @@ import geopandas as gpd
 import requests
 import yaml
 
+from shapely import GeometryCollection
+
 class LocationToGridCellsMapper ():
     """Provides mappings from location-points to the grid-cells in which they are located"""
 
@@ -108,3 +110,12 @@ class LocationToGridCellsMapper ():
         logging.info('Mapping of locations to grid-cells complete!')
         logging.debug(f'Result of mapping: {result}')
         return result
+
+    def get_cell(self, name:str) -> GeometryCollection:
+        grid = self.get_grid()
+        cells = grid[grid['cell_name'] == name]
+        if len(cells) == 0:
+            raise ValueError(f'There is no cell with name {name}')
+        cell = cells['geometry'].iloc[0]
+        assert isinstance(cell, GeometryCollection), f'Geometry field of cell {name} is not a GeometryCollection'
+        return cell

@@ -45,15 +45,25 @@ class SatelliteDataService(SatelliteDataAccess):
         logging.info('Query for geometry complete!')
         return JSONResponse(json.loads(grid_cells.to_json(drop_id=True)))
 
-    async def queryProductsMetadata(self, footprint:str, datetime_from:datetime, datetime_to:datetime,
+    async def queryProductsMetadata(self, data:dict, datetime_from:datetime, datetime_to:datetime,
         credentials:HTTPBasicCredentials = Depends(security)):
-        # Convert footprint to shape and assert type
-        footprint_geometry = shapely.from_wkt(footprint)
-        assert isinstance(footprint_geometry, (Point, Polygon))
-        # Query products
+        self.validate_json_parameters(data, [['footprint', 'cell_name']])
         ca = CopernicusAccess(credentials.username, credentials.password)
-        logging.info(f'Querying products from {datetime_from} to {datetime_to} in footprint {footprint_geometry}..')
-        data = ca.search(footprint_geometry, datetime_from, datetime_to)
+        if 'footprint' in data:
+            footprint: str = data['footprint']
+            # Convert footprint to shape and assert type
+            footprint_geometry = shapely.from_wkt(footprint)
+            assert isinstance(footprint_geometry, shapely.Geometry)
+            # Query products
+            logging.info(f'Querying products from {datetime_from} to {datetime_to} in footprint {footprint_geometry}..')
+            data = ca.searchFootprint(footprint_geometry, datetime_from, datetime_to)
+        elif 'cell_name' in data:
+            cell_name: str = data['cell_name']
+            # Query products
+            logging.info(f'Querying products from {datetime_from} to {datetime_to} in grid-cell {cell_name}..')
+            data = ca.searchCell(cell_name, datetime_from, datetime_to)
+        else:
+            raise ValueError('The input data was invalid and the checks failed')
         logging.info('Query for products complete!')
         return JSONResponse(json.loads(data.to_json()))
     

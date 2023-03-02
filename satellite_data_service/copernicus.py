@@ -12,11 +12,10 @@ import numpy as np
 import pandas as pd
 import schedule
 import yaml
-from sentinelsat import (InvalidKeyError, LTAError, LTATriggered, SentinelAPI,
-                         ServerError)
+from sentinelsat import (InvalidKeyError, LTAError, LTATriggered, SentinelAPI, ServerError, InvalidChecksumError)
 from shapely import Point, Polygon
 
-from . import SentinelImageProcessor
+from . import SentinelImageProcessor, LocationToGridCellsMapper
 
 from aimlsse_api.data import QueryStates
 
@@ -115,14 +114,16 @@ class RequestScheduler(object):
     def __unzip_product(self, id:str) -> str:
         request = self.__get_request(id)
         path_no_ext = os.path.join(self.data_dir, request['title'])
-        filename_zip = path_no_ext + '.zip'
-        dir_safe = path_no_ext + '.SAFE'
-        if not os.path.exists(dir_safe):
+        filepath_zip = path_no_ext + '.zip'
+        dirpath_safe = path_no_ext + '.SAFE'
+        if not os.path.isdir(dirpath_safe):
             # Extract zip file like S2A_MSIL1C_20220104T103431_N0301_R108_T32UMA_20220104T123507.zip
             # to S2A_MSIL1C_20220104T103431_N0301_R108_T32UMA_20220104T123507.SAFE/
-            with ZipFile(filename_zip) as zip_file:
+            with ZipFile(filepath_zip) as zip_file:
                 zip_file.extractall(self.data_dir)
-        return dir_safe
+            # Remove the original zip file so we do not have duplicates
+            os.remove(filepath_zip)
+        return dirpath_safe
 
     def process_data_for_request(self, id:str, bands:List[str], locations:gpd.GeoDataFrame, radius:float) -> str:
         self.__assert_request_available(id)
@@ -176,8 +177,18 @@ class RequestScheduler(object):
             self.schedule.loc[id]['state'] = QueryStates.UNAVAILABLE.value
             self.logger.info(f'Data for id {id} is not available - no request could be initiated')
         except ServerError as error:
-            self.logger.warning(f'Copernicus server error: {error.msg}')
+            self.logger.error(f'Copernicus server error: {error.msg}')
             self.schedule.loc[id]['state'] = old_state
+        except InvalidChecksumError:
+            self.logger.error(f'Invalid checksum of download')
+            self.schedule.loc[id]['state'] = old_state
+            request = self.__get_request(id)
+            filepath_zip = os.path.join(self.data_dir, request['title'] + '.zip')
+            if os.path.exists(filepath_zip):
+                os.remove(filepath_zip)
+            else:
+                self.schedule.loc[id]['state'] = QueryStates.UNAVAILABLE
+
         self.schedule.loc[id]['last_query'] = np.datetime64('now')
 
     def __try_download_with_local_checks(self, id:str, username:str, password:str) -> bool:
@@ -224,14 +235,25 @@ class CopernicusAccess():
     def get_password(self) -> str:
         return self.password
 
-    def search(self, footprint:Union[Point, Polygon], datetime_from:datetime, datetime_to:datetime) -> pd.DataFrame:
-        def asZulu(dt:datetime):
-            return dt.astimezone(timezone.utc)
+    def __asZulu(self, dt:datetime):
+        return dt.astimezone(timezone.utc)
 
+    def searchFootprint(self, footprint:Union[Point, Polygon], datetime_from:datetime, datetime_to:datetime) -> pd.DataFrame:
         api = self.get_api()
         products = api.query(
             footprint,
-            date=(asZulu(datetime_from), asZulu(datetime_to)),
+            date=(self.__asZulu(datetime_from), self.__asZulu(datetime_to)),
+            platformname='Sentinel-2',
+            producttype='S2MSI1C'
+        )
+        return api.to_dataframe(products)
+    
+    def searchCell(self, cell_name:str, datetime_from:datetime, datetime_to:datetime) -> pd.DataFrame:
+        api = self.get_api()
+        cell = LocationToGridCellsMapper().get_cell(cell_name)
+        products = api.query(
+            cell.centroid,
+            date=(self.__asZulu(datetime_from), self.__asZulu(datetime_to)),
             platformname='Sentinel-2',
             producttype='S2MSI1C'
         )
