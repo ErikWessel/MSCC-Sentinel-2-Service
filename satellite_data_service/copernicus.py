@@ -178,7 +178,11 @@ class RequestScheduler(object):
             self.logger.info(f'Data for id {id} is not available - no request could be initiated')
         except ServerError as error:
             self.logger.error(f'Copernicus server error: {error.msg}')
-            self.schedule.loc[id]['state'] = old_state
+            if 'NullPointerException' in error.msg:
+                self.schedule.loc[id]['state'] = QueryStates.UNAVAILABLE
+            else:
+                # The server is probably down for maintainance
+                self.schedule.loc[id]['state'] = old_state
         except InvalidChecksumError:
             self.logger.error(f'Invalid checksum of download')
             self.schedule.loc[id]['state'] = old_state
