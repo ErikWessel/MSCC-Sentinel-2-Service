@@ -7,6 +7,7 @@ from typing import List, Union
 
 import geopandas as gpd
 import shapely
+import yaml
 from aimlsse_api.interface import SatelliteDataAccess
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -32,6 +33,7 @@ class SatelliteDataService(SatelliteDataAccess):
         self.router.add_api_route('/getProduct', self.getProduct, methods=['GET'])
         
         self.locationToGridCellsMapper = LocationToGridCellsMapper()
+        self.delete_source_after_processing = yaml.safe_load(open('config.yml'))['processing']['delete-source']
 
     async def queryContainingGeometry(self, locations:Request) -> JSONResponse:
         logging.info('Querying for geometry..')
@@ -82,7 +84,8 @@ class SatelliteDataService(SatelliteDataAccess):
         bands: List[str] = data['bands']
         locations: gpd.GeoDataFrame = gpd.GeoDataFrame.from_features(data['locations'], crs=data['crs'])
         try:
-            zip_filepath = RequestScheduler().process_data_for_request(id, bands, locations, radius)
+            zip_filepath = RequestScheduler().process_data_for_request(id, bands, locations, radius,
+                self.delete_source_after_processing)
         except ValueError as error:
             self.logger.debug(error)
             return PlainTextResponse(error, status_code=HTTPStatus.BAD_REQUEST)

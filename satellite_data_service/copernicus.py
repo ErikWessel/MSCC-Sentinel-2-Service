@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import threading
 import time
 from datetime import datetime, timezone
@@ -12,12 +13,13 @@ import numpy as np
 import pandas as pd
 import schedule
 import yaml
-from sentinelsat import (InvalidKeyError, LTAError, LTATriggered, SentinelAPI, ServerError, InvalidChecksumError)
+from aimlsse_api.data import QueryStates
+from sentinelsat import (InvalidChecksumError, InvalidKeyError, LTAError,
+                         LTATriggered, SentinelAPI, ServerError)
 from shapely import Point, Polygon
 
-from . import SentinelImageProcessor, LocationToGridCellsMapper
+from . import LocationToGridCellsMapper, SentinelImageProcessor
 
-from aimlsse_api.data import QueryStates
 
 class RequestScheduler(object):
     def __new__(cls):
@@ -107,7 +109,8 @@ class RequestScheduler(object):
         request = self.__get_request(id)
         if request is None:
             raise ValueError(f'There is no request with id {id}')
-        state = QueryStates(request['state'])
+        state = self.__check_available(id)
+        self.schedule.loc[id]['state'] = state
         if state != QueryStates.AVAILABLE:
             raise ValueError(f'Only requests of state {QueryStates.AVAILABLE.name} may be processed - actual state was {state}')
     
@@ -125,11 +128,16 @@ class RequestScheduler(object):
             os.remove(filepath_zip)
         return dirpath_safe
 
-    def process_data_for_request(self, id:str, bands:List[str], locations:gpd.GeoDataFrame, radius:float) -> str:
+    def process_data_for_request(self, id:str, bands:List[str], locations:gpd.GeoDataFrame,
+            radius:float, remove_source:bool) -> str:
         self.__assert_request_available(id)
         product_dir = self.__unzip_product(id)
         # Extract features from the sentinel data
-        return SentinelImageProcessor().process(product_dir, id, bands, locations, radius)
+        zip_filepath = SentinelImageProcessor().process(product_dir, id, bands, locations, radius)
+        if remove_source:
+            shutil.rmtree(product_dir)
+        self.schedule.loc[id]['state'] = QueryStates.PROCESSED
+        return zip_filepath
     
     def get_raw_product(self, id:str) -> str:
         self.__assert_request_available(id)

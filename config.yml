@@ -7,3 +7,4 @@ copernicus:
   schedule-filepath: "data/sentinel/schedule.csv"
 processing:
   data-dir: "data/sentinel/processed/"
+  delete-source: True
