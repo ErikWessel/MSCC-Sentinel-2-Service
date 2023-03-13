@@ -64,7 +64,6 @@ class RequestScheduler(object):
 
     def __get_request(self, id:str) -> Optional[pd.DataFrame]:
         try:
-            self.__check_available(id)
             return self.schedule.loc[id]
         except KeyError:
             return None
@@ -90,10 +89,9 @@ class RequestScheduler(object):
             self.schedule = pd.concat([self.schedule, pd.DataFrame(new_request, index=[id])])
             self.logger.info(f'Added new request: {new_request}')
         else:
-            state = request['state']
+            state = self.__check_state(id)
             self.logger.info(f'Request already made - state is: {state}')
-        request = self.__get_request(id)
-        state = request['state']
+        state = self.__check_state(id)
         should_download = id not in self.active_requests and self.__should_download(state)
         self.logger.debug(f'State is {state} - should download? {should_download}')
         if should_download:
@@ -103,14 +101,14 @@ class RequestScheduler(object):
                 job = schedule.every(30).minutes.do(self.__try_download_with_local_checks, id, username, password)
                 self.active_requests[id] = job
             request = self.__get_request(id)
-            state = request['state']
+            state = self.__check_state(id)
         return QueryStates(state)
 
     def __assert_request_available(self, id:str):
         request = self.__get_request(id)
         if request is None:
             raise ValueError(f'There is no request with id {id}')
-        state = self.__check_available(id)
+        state = self.__check_state(id)
         self.schedule.loc[id]['state'] = state
         if state != QueryStates.AVAILABLE:
             raise ValueError(f'Only requests of state {QueryStates.AVAILABLE.name} may be processed - actual state was {state}')
@@ -145,7 +143,7 @@ class RequestScheduler(object):
         request = self.__get_request(id)
         return os.path.join(self.data_dir, request['title'] + '.zip')
 
-    def __check_available(self, id:str) -> QueryStates:
+    def __check_state(self, id:str) -> QueryStates:
         request = self.__get_request(id)
         if request is None:
             raise ValueError(f'There is no request for {id} - create one first')
@@ -155,7 +153,9 @@ class RequestScheduler(object):
         state = QueryStates(request['state'])
         if any(filter(lambda x: x.endswith('.zip') or x.endswith('.SAFE'), files)):
             state = QueryStates.AVAILABLE
-        elif any(filter(lambda x: x.endswith('.incomplete'), files)):
+        elif state == QueryStates.AVAILABLE:
+            state = QueryStates.NEW
+        if any(filter(lambda x: x.endswith('.incomplete'), files)):
             state = QueryStates.INCOMPLETE
         self.schedule.loc[id]['state']
         return state
@@ -212,7 +212,7 @@ class RequestScheduler(object):
         if request is None:
             raise ValueError(f'There is no request for {id} - create one first')
         # Check if data is locally available
-        checked_state = self.__check_available(id)
+        checked_state = self.__check_state(id)
         if not self.__should_download(checked_state):
             self.logger.debug('Data is available in storage')
             if id in self.active_requests:
@@ -221,7 +221,7 @@ class RequestScheduler(object):
         self.logger.debug('Data unavailable - trying to download')
         self.logger.debug(f'Id: {id}, api: {api}')
         self.__try_download_sentinel_data(id, api)
-        checked_state = self.__check_available(id)
+        checked_state = self.__check_state(id)
         self.logger.debug(f'Current state is {checked_state} for id {id}')
         return checked_state == QueryStates.AVAILABLE
 
