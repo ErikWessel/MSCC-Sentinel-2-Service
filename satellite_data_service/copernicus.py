@@ -64,6 +64,7 @@ class RequestScheduler(object):
 
     def __get_request(self, id:str) -> Optional[pd.DataFrame]:
         try:
+            self.__check_available(id)
             return self.schedule.loc[id]
         except KeyError:
             return None
@@ -151,11 +152,13 @@ class RequestScheduler(object):
         self.logger.debug(f'Checking availability for request {request}')
         files = list(filter(lambda x: x.startswith(request['title']), os.listdir(self.data_dir)))
         self.logger.debug(f'Found {len(files)} files for id {id}:\n{files}')
+        state = QueryStates(request['state'])
         if any(filter(lambda x: x.endswith('.zip') or x.endswith('.SAFE'), files)):
-            return QueryStates.AVAILABLE
-        if any(filter(lambda x: x.endswith('.incomplete'), files)):
-            return QueryStates.INCOMPLETE
-        return QueryStates(request['state'])
+            state = QueryStates.AVAILABLE
+        elif any(filter(lambda x: x.endswith('.incomplete'), files)):
+            state = QueryStates.INCOMPLETE
+        self.schedule.loc[id]['state']
+        return state
 
     def __should_download(self, state:QueryStates) -> bool:
         return state in [
@@ -210,7 +213,6 @@ class RequestScheduler(object):
             raise ValueError(f'There is no request for {id} - create one first')
         # Check if data is locally available
         checked_state = self.__check_available(id)
-        self.schedule.loc[id]['state'] = checked_state
         if not self.__should_download(checked_state):
             self.logger.debug('Data is available in storage')
             if id in self.active_requests:
