@@ -85,7 +85,7 @@ class SentinelImageProcessor:
         self.logger.debug(f'The bounding boxes of the following locations are outside the data bounds: {outside_locations.name}')
         locations = locations[locations['contained']]
         # Extract data in bounding boxes from whole data and write to files
-        out_dir = os.path.join(self.data_dir, f'{id}_all_bands')
+        out_dir = os.path.join(self.data_dir, id)
         os.makedirs(out_dir, exist_ok=True)
         for band_name, band in data.items():
             out_band_dir = os.path.join(out_dir, band_name)
