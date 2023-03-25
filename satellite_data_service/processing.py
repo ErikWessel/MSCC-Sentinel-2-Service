@@ -99,19 +99,11 @@ class SentinelImageProcessor:
                     os.path.join(out_band_dir, row['name'] + '.jp2'),
                     SentinelImageProcessor.image_drivers['jp2']
                 ), axis=1)
-        # Copy only the wanted bands in a new temporary folder
-        tmp_dir = os.path.join(self.data_dir, id)
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
-        os.makedirs(tmp_dir)
-        for band_name in data.keys():
-            shutil.copytree(
-                os.path.join(out_dir, band_name),
-                os.path.join(tmp_dir, band_name),
-                copy_function=shutil.copy2
-            )
-        # Finally pack all data in a zip file and return the filepath
-        return shutil.make_archive(tmp_dir, 'zip', root_dir=self.data_dir, base_dir=id)
+        # Pack all data in a zip file
+        archive = shutil.make_archive(out_dir, 'zip', root_dir=self.data_dir, base_dir=id)
+        # Remove source folder
+        shutil.rmtree(out_dir)
+        return archive
     
     def get_band_name_for_files(self, name:str) -> str:
         if len(name) < 3:
