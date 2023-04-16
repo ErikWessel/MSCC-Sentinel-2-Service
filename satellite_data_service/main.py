@@ -12,6 +12,7 @@ from aimlsse_api.interface import SatelliteDataAccess
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from starlette.background import BackgroundTask
 from shapely import Point, Polygon
 
 from . import CopernicusAccess, LocationToGridCellsMapper, RequestScheduler
@@ -83,14 +84,15 @@ class SatelliteDataService(SatelliteDataAccess):
         self.logger.debug(f'Starting feature-extraction for id {id} with radius {radius} m and data:\n{data}')
         bands: List[str] = data['bands']
         locations: gpd.GeoDataFrame = gpd.GeoDataFrame.from_features(data['locations'], crs=data['crs'])
+        request_scheduler = RequestScheduler()
         try:
-            zip_filepath = RequestScheduler().process_data_for_request(id, bands, locations, radius,
+            zip_filepath = request_scheduler.process_data_for_request(id, bands, locations, radius,
                 self.delete_source_after_processing)
         except ValueError as error:
             self.logger.debug(error)
             return PlainTextResponse(error, status_code=HTTPStatus.BAD_REQUEST)
         self.logger.debug(f'Path of zip-file: {zip_filepath}')
-        return FileResponse(zip_filepath, filename=f'{id}.zip')
+        return FileResponse(zip_filepath, filename=f'{id}.zip', background=BackgroundTask(request_scheduler.remove_request, id))
 
     async def getProduct(self, id:str):
         try:

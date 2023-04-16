@@ -138,6 +138,28 @@ class RequestScheduler(object):
         self.schedule.loc[id]['state'] = QueryStates.PROCESSED
         return zip_filepath
     
+    def remove_request(self, id:str):
+        if id not in self.schedule.index:
+            self.logger.warn(f'Request with id {id} can not be removed because it does not exist')
+            return
+        SentinelImageProcessor().remove(id)
+        try:
+            self.__assert_request_available(id)
+            self.logger.debug(f'Removing satellite images for id {id}..')
+            request = self.__get_request(id)
+            files = list(filter(lambda x: x.startswith(request['title']), os.listdir(self.data_dir)))
+            for file in files:
+                if os.path.isfile(file):
+                    os.remove(file)
+                elif os.path.isdir(file):
+                    shutil.rmtree(file)
+                else:
+                    self.logger.warn(f'Unexpected type of path {file} during removal of request for id {id}')
+        except:
+            pass
+        self.logger.debug(f'Removing request for id {id}..')
+        self.schedule.drop(id, inplace=True)
+
     def get_raw_product(self, id:str) -> str:
         self.__assert_request_available(id)
         request = self.__get_request(id)

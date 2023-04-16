@@ -32,6 +32,12 @@ class SentinelImageProcessor:
         config = yaml.safe_load(open('config.yml'))['processing']
         self.data_dir: str = config['data-dir']
     
+    def remove(self, id:str):
+        filepath = os.path.join(self.data_dir, f'{id}.zip')
+        if os.path.exists(filepath):
+            self.logger.debug(f'Removing zip for id {id}..')
+            os.remove(filepath)
+
     def process(self, input_dir:str, id:str, bands:List[str], locations:gpd.GeoDataFrame, radius:float) -> str:
         if not os.path.exists(input_dir):
             raise ValueError(f'No such directory: {input_dir}')
