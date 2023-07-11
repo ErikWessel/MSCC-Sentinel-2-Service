@@ -3,17 +3,17 @@ import logging
 from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
-from typing import List, Union
+from typing import Annotated, List, Union
 
 import geopandas as gpd
 import shapely
 import yaml
 from aimlsse_api.interface import SatelliteDataAccess
-from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from starlette.background import BackgroundTask
 from shapely import Point, Polygon
+from starlette.background import BackgroundTask
 
 from . import CopernicusAccess, LocationToGridCellsMapper, RequestScheduler
 
@@ -48,7 +48,16 @@ class SatelliteDataService(SatelliteDataAccess):
         logging.info('Query for geometry complete!')
         return JSONResponse(json.loads(grid_cells.to_json(drop_id=True)))
 
-    async def queryProductsMetadata(self, data:dict, datetime_from:datetime, datetime_to:datetime,
+    async def queryProductsMetadata(self, data:Annotated[dict, Body(
+            examples=[
+                {
+                    'footprint': 'POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))'
+                },
+                {
+                    'cell_name': '32UMU'
+                }
+            ]
+    )], datetime_from:datetime, datetime_to:datetime,
         credentials:HTTPBasicCredentials = Depends(security)):
         self.validate_json_parameters(data, [['footprint', 'cell_name']])
         ca = CopernicusAccess(credentials.username, credentials.password)
@@ -66,7 +75,7 @@ class SatelliteDataService(SatelliteDataAccess):
             logging.info(f'Querying products from {datetime_from} to {datetime_to} in grid-cell {cell_name}..')
             data = ca.searchCell(cell_name, datetime_from, datetime_to)
         else:
-            raise ValueError('The input data was invalid and the checks failed')
+            raise HTTPException(status_code=400, detail='Neither footprint nor cell_name are defined')
         logging.info('Query for products complete!')
         return JSONResponse(json.loads(data.to_json()))
     
@@ -79,7 +88,15 @@ class SatelliteDataService(SatelliteDataAccess):
             'state': state.value
         })
     
-    async def extractFeatures(self, id:str, radius:float, data:dict):
+    async def extractFeatures(self, id:str, radius:float, data:Annotated[dict, Body(
+            examples=[
+                {
+                    'bands': ['B02', 'B03', 'B04', 'B11'],
+                    'locations': ['POINT (30 10)', 'POINT (20 40)'],
+                    'crs': 'EPSG:4326'
+                }
+            ]
+    )]):
         self.validate_json_parameters(data, [['bands'], ['locations'], ['crs']])
         self.logger.debug(f'Starting feature-extraction for id {id} with radius {radius} m and data:\n{data}')
         bands: List[str] = data['bands']
@@ -129,7 +146,7 @@ class SatelliteDataService(SatelliteDataAccess):
         for attributes in parameters:
             attributes_present = list(filter(lambda x: x in data, attributes))
             if len(attributes_present) == 0:
-                raise ValueError(f'Missing information about "{attributes}" from received JSON data.')
+                raise HTTPException(status_code=400, detail=f'Missing information about "{attributes}" from received JSON data.')
             else:
                 parameters_present += [attributes_present]
         return parameters_present
